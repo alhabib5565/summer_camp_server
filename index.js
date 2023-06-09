@@ -8,11 +8,10 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
-console.log(process.env.DB_USER, process.env.DB_PASS)
+// console.log(process.env.DB_USER, process.env.DB_PASS)
 app.get('/', (req, res) => {
     res.send('summer camp school')
 })
-
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.czarj6h.mongodb.net/?retryWrites=true&w=majority`;
 
@@ -32,10 +31,19 @@ async function run() {
     await client.connect();
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
+
+    const usersCollection = client.db('summerCampDB').collection('users')
+
+    app.post('/createUser',async (req, res) => {
+      const user = req.body
+      const result = await usersCollection.insertOne(user)
+      res.send(result)
+      // console.log(user)
+    })
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
-    await client.close();
+    // await client.close();
   }
 }
 run().catch(console.dir);
