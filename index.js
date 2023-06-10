@@ -9,6 +9,22 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
+const verifyJWT = (req, res, next) => {
+  const authrization = req.headers.authrization
+  if(!authrization){
+    return res.status(401).send({message: 'unauthorized access'})
+  }
+  const token = authrization.split(' ')[1]
+  jwt.verify(token,process.env.ACCESS_TOKEN, (error, decoded) => {
+    if(error){
+      return res.status(401).send({message: 'unauthorized access'})
+    }
+    console.log('decoidedddd',decoded)
+    req.decoded = decoded
+    next()
+  })
+}
+
 // console.log(process.env.DB_USER, process.env.DB_PASS)
 app.get('/', (req, res) => {
   res.send('summer camp school')
@@ -36,10 +52,10 @@ async function run() {
     const usersCollection = client.db('summerCampDB').collection('users')
     const classCollention = client.db('summerCampDB').collection('class')
 
-    app.post('/jwt', (req, res) => {
+    app.post('/ganarate_jwt', (req, res) => {
       const body = req.body
       const token = jwt.sign(body,process.env.ACCESS_TOKEN, {expiresIn: '1h'})
-      res.send(token)
+      res.send({token})
     })
 
     //user related routes
@@ -68,7 +84,7 @@ async function run() {
       res.send(result)
     })
 
-    app.get('/class/:email', async (req, res) => {
+    app.get('/class/:email',verifyJWT, async (req, res) => {
       const email = req.params.email
       // console.log(email)
       const query = { email: email }
