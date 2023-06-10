@@ -33,7 +33,7 @@ async function run() {
     await client.db("admin").command({ ping: 1 });
     //collections
     const usersCollection = client.db('summerCampDB').collection('users')
-
+    const classCollention = client.db('summerCampDB').collection('class')
     //user related routes
     app.post('/createUser', async (req, res) => {
       const user = req.body
@@ -45,6 +45,13 @@ async function run() {
       const result = await usersCollection.find().toArray()
       res.send(result)
     })
+    // class related 
+    app.post('/saveClass',async (req, res) => {
+      const classes = req.body
+      const result = await classCollention.insertOne(classes)
+      res.send(result)
+    })
+
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
