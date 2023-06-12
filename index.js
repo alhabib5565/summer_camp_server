@@ -156,10 +156,20 @@ app.post('/saveClass', async (req, res) => {
   res.send(result)
 })
 
-app.get('/allClass', async (req, res) => {
+app.get('allClass',async (req, res) => {
   const result = await classCollention.find().toArray()
   res.send(result)
 })
+app.get('/approveClass', async (req, res) => {
+  const status = {status:"approve"}
+  const result = await classCollention.find(status).toArray()
+  res.send(result)
+})
+// app.get('/instructor', async (req, res) => {
+//   const role = { role: "instructor" }//instructor
+//   const result = await usersCollection.find(role).toArray()
+//   res.send(result)
+// })
 
 app.get('/class/:email', verifyJWT, verifyInstructor, async (req, res) => {
   const email = req.params.email
