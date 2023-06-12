@@ -10,6 +10,7 @@ app.use(cors())
 app.use(express.json())
 
 const verifyJWT = (req, res, next) => {
+  // console.log()
   const authrization = req.headers.authrization
   if (!authrization) {
     return res.status(401).send({ message: 'unauthorized access' })
@@ -50,7 +51,7 @@ dbConnect()
 //collections
 const usersCollection = client.db('summerCampDB').collection('users')
 const classCollention = client.db('summerCampDB').collection('class')
-
+const selectClassCollection = client.db('summerCampDB').collection('selecClass')
 app.get('/', (req, res) => {
   res.send('summer camp school')
 })
@@ -71,6 +72,32 @@ app.post('/ganarate_jwt', (req, res) => {
   const token = jwt.sign(body, process.env.ACCESS_TOKEN, { expiresIn: '1h' })
   res.send({ token })
 })
+
+//---------------select class --------------------
+app.post('/select', async (req, res) => {
+  const clss = req.body;
+  console.log(clss)
+  const result = await selectClassCollection.insertOne(clss);
+  res.send(result);
+})
+
+
+
+app.get('/mySelectClass', verifyJWT, async (req, res) => {
+  const email = req.query.email;
+  if (!email) {
+    res.send([]);
+  }
+  const decodedEmail = req.decoded.email;
+  if (email !== decodedEmail) {
+    return res.status(403).send({ error: true, message: 'forbidden access' })
+  }
+
+  const query = { email: email };
+  const result = await selectClassCollection.find(query).toArray();
+  res.send(result);
+});
+
 //admin
 app.get('/users/admin/:email', verifyJWT, async (req, res) => {
   const email = req.params.email;
@@ -156,12 +183,12 @@ app.post('/saveClass', async (req, res) => {
   res.send(result)
 })
 
-app.get('allClass',async (req, res) => {
+app.get('/allClass', async (req, res) => {
   const result = await classCollention.find().toArray()
   res.send(result)
 })
 app.get('/approveClass', async (req, res) => {
-  const status = {status:"approve"}
+  const status = { status: "approve" }
   const result = await classCollention.find(status).toArray()
   res.send(result)
 })
