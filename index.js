@@ -11,21 +11,21 @@ app.use(express.json())
 
 const verifyJWT = (req, res, next) => {
   const authrization = req.headers.authrization
-  if(!authrization){
-    return res.status(401).send({message: 'unauthorized access'})
+  console.log(authrization)
+  if (!authrization) {
+    return res.status(401).send({ message: 'unauthorized access' })
   }
   const token = authrization.split(' ')[1]
-  jwt.verify(token,process.env.ACCESS_TOKEN, (error, decoded) => {
-    if(error){
-      return res.status(401).send({message: 'unauthorized access'})
+  jwt.verify(token, process.env.ACCESS_TOKEN, (error, decoded) => {
+    if (error) {
+      return res.status(401).send({ message: 'unauthorized access' })
     }
-    console.log('decoidedddd',decoded)
     req.decoded = decoded
     next()
   })
 }
 
-// console.log(process.env.DB_USER, process.env.DB_PASS)
+
 app.get('/', (req, res) => {
   res.send('summer camp school')
 })
@@ -52,27 +52,96 @@ async function run() {
     const usersCollection = client.db('summerCampDB').collection('users')
     const classCollention = client.db('summerCampDB').collection('class')
 
+    const verifyInstructor = async (req, res, next) => {
+      const email = req.decoded.email
+      const query = { email: email }
+      const user = await usersCollection.findOne(query)
+    
+      if (user?.role !== 'instructor') {
+        return res.status(403).send({ error: true, message: 'forbidden message' });
+      }
+      next();
+    }
+
     app.post('/ganarate_jwt', (req, res) => {
       const body = req.body
-      const token = jwt.sign(body,process.env.ACCESS_TOKEN, {expiresIn: '1h'})
-      res.send({token})
+      const token = jwt.sign(body, process.env.ACCESS_TOKEN, { expiresIn: '1h' })
+      res.send({ token })
+    })
+    //admin
+    app.get('/users/admin/:email',verifyJWT, async (req, res) => {
+      const email = req.params.email;
+
+      if (req.decoded.email !== email) {
+        res.send({ admin: false })
+      }
+      const query = { email: email }
+      const user = await usersCollection.findOne(query);
+      const result = { admin: user?.role === 'admin' }
+      res.send(result);
+    })
+
+    //instructor
+    app.get('/users/instructor/:email',verifyJWT, async (req, res) => {
+      const email = req.params.email;
+
+      if (req.decoded.email !== email) {
+        res.send({ instructor: false })
+      }
+      const query = { email: email }
+      const user = await usersCollection.findOne(query);
+      const result = { instructor: user?.role === 'instructor' }
+      res.send(result);
     })
 
     //user related routes
     app.post('/createUser', async (req, res) => {
       const user = req.body
+      const email = user.email
+      const query = {email: email}
+      const existing = await usersCollection.findOne(query)
+      if(existing) {
+        return res.send('user already exist')
+      }
       const result = await usersCollection.insertOne(user)
       res.send(result)
-      // console.log(user)
+    
     })
+
     app.get('/allUser', async (req, res) => {
       const result = await usersCollection.find().toArray()
       res.send(result)
     })
 
+    app.put('/users/admin/:id',async (req, res) => {
+      const id = req.params.id
+      const filter = {_id: new ObjectId(id)}
+      
+      const updateDoc = {
+        $set: {
+          role: 'admin'
+        }
+      }
+      const result = await usersCollection.updateOne(filter,updateDoc)
+      res.send(result)
+    })
+
+    app.patch('/users/instructor/:id',async (req, res) => {
+      const id = req.params.id
+      const filter = {_id: new ObjectId(id)}
+      
+      const updateDoc = {
+        $set: {
+          role: 'instructor'
+        }
+      }
+      const result = await usersCollection.updateOne(filter,updateDoc)
+      res.send(result)
+    })
+
     // instructor
-    app.get('/instructor',async (req, res) => {
-      const role = {role: "instructor"}//instructor
+    app.get('/instructor', async (req, res) => {
+      const role = { role: "instructor" }//instructor
       const result = await usersCollection.find(role).toArray()
       res.send(result)
     })
@@ -84,9 +153,14 @@ async function run() {
       res.send(result)
     })
 
-    app.get('/class/:email',verifyJWT, async (req, res) => {
+    app.get('/allClass', async(req, res) => {
+      const result = await classCollention.find().toArray()
+      res.send(result)
+    })
+
+    app.get('/class/:email', verifyJWT, verifyInstructor, async (req, res) => {
       const email = req.params.email
-      // console.log(email)
+    
       const query = { email: email }
       const result = await classCollention.find(query).toArray()
       res.send(result)
@@ -101,16 +175,16 @@ async function run() {
 
     app.put('/updateClas/:id', async (req, res) => {
       const newClass = req.body
-      // console.log(newClass)
+    
       const id = req.params.id
-       const filter = {_id: new ObjectId(id)}
+      const filter = { _id: new ObjectId(id) }
       const options = { upsert: true };
       const updateDoc = {
         $set: {
           className: newClass.className,
-            price: newClass.price,
-            sets: newClass.sets,
-            photo: newClass.photo
+          price: newClass.price,
+          sets: newClass.sets,
+          photo: newClass.photo
         },
       };
       const result = await classCollention.updateOne(filter, updateDoc, options)
