@@ -10,18 +10,19 @@ app.use(cors())
 app.use(express.json())
 
 const verifyJWT = (req, res, next) => {
-  // console.log()
   const authrization = req.headers.authrization
   if (!authrization) {
     return res.status(401).send({ message: 'unauthorized access' })
   }
   const token = authrization.split(' ')[1]
   jwt.verify(token, process.env.ACCESS_TOKEN, (error, decoded) => {
+    // console.log(authrization)
     if (error) {
       return res.status(401).send({ message: 'unauthorized access' })
     }
     req.decoded = decoded
     next()
+    console.log('gello')
   })
 }
 
@@ -76,15 +77,14 @@ app.post('/ganarate_jwt', (req, res) => {
 //---------------select class --------------------
 app.post('/select', async (req, res) => {
   const clss = req.body;
-  console.log(clss)
   const result = await selectClassCollection.insertOne(clss);
   res.send(result);
 })
 
 
-
-app.get('/mySelectClass', verifyJWT, async (req, res) => {
+app.get('/mySelectClass',verifyJWT, async (req, res) => {
   const email = req.query.email;
+  console.log('selectclass', email)
   if (!email) {
     res.send([]);
   }
