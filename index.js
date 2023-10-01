@@ -2,27 +2,31 @@ require('dotenv').config()
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
+const stripe = require("stripe")(process.env.Payment_secrte)
+
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 5000
 const app = express()
+const morgan = require('morgan')
 // middleWare
 app.use(cors())
 app.use(express.json())
+app.use(morgan('dev'))
 
 const verifyJWT = (req, res, next) => {
-  const authrization = req.headers.authrization
+  const authrization = req.headers.authorization
+  // console.log('authorization token',authrization)
   if (!authrization) {
     return res.status(401).send({ message: 'unauthorized access' })
   }
+
   const token = authrization.split(' ')[1]
   jwt.verify(token, process.env.ACCESS_TOKEN, (error, decoded) => {
-    // console.log(authrization)
     if (error) {
       return res.status(401).send({ message: 'unauthorized access' })
     }
     req.decoded = decoded
     next()
-    console.log('gello')
   })
 }
 
@@ -53,6 +57,7 @@ dbConnect()
 const usersCollection = client.db('summerCampDB').collection('users')
 const classCollention = client.db('summerCampDB').collection('class')
 const selectClassCollection = client.db('summerCampDB').collection('selecClass')
+const enrolledClassCollection = client.db('summerCampDB').collection('enrolled')
 app.get('/', (req, res) => {
   res.send('summer camp school')
 })
@@ -68,23 +73,88 @@ const verifyInstructor = async (req, res, next) => {
   next();
 }
 
+// create payment intent
+app.post('/create-payment-intent', verifyJWT, async (req, res) => {
+  const { price } = req.body
+  console.log(price)
+  const amount = parseFloat(price) * 100
+  if (!price) return
+  const paymentIntent = await stripe.paymentIntents.create({
+    amount: amount,
+    currency: 'usd',
+    payment_method_types: ['card'],
+  })
+
+  res.send({
+    clientSecret: paymentIntent.client_secret,
+  })
+})
+
+
 app.post('/ganarate_jwt', (req, res) => {
   const body = req.body
   const token = jwt.sign(body, process.env.ACCESS_TOKEN, { expiresIn: '1h' })
   res.send({ token })
 })
 
-//---------------select class --------------------
+// ---------------enrolled class ---------------------
+app.post('/enrolled', verifyJWT, async (req, res) => {
+  const enrolledClss = req.body;
+  const query = { classId: enrolledClss.classId, studentEmail: enrolledClss.studentEmail };
+  console.log('query', query);
+  const existClass = await enrolledClassCollection.findOne(query)
+  console.log(existClass)
+  if (existClass) {
+    return res.send({ message: 'already exist' })
+  }
+  const result = await enrolledClassCollection.insertOne(enrolledClss);
+  res.send(result);
+})
+
+// --------------all enroll class -------------------
+app.get('/enrollClass', verifyJWT, async (req, res) => {
+  const email = req.query.email
+  const query = { studentEmail: email }
+  const result = await enrolledClassCollection.find(query).toArray()
+  res.send(result)
+})
+//----------------------- popular class --------------------------
+app.get("/popularCls", async (req, res) => {
+  const jobs = await classCollention.find({}).sort({ enrolled: 1 }).toArray();
+  res.send(jobs);
+});
+//--------------------------increse enrolld sets after enrolled successfull-----------------
+app.patch('/reduceSets/:id', async (req, res) => {
+  const id = req.params.id
+  const filter = { _id: new ObjectId(id) }
+  const clss = await classCollention.findOne(filter)
+  if (!clss) {
+    return res.status(404).send({ error: 'Class not found' });
+  }
+  const currentlyEnrolled = clss.enrolled
+  const updateSetNum = {
+    $set: {
+      enrolled: currentlyEnrolled + 1
+    }
+  }
+  const result = await classCollention.updateOne(filter, updateSetNum)
+  res.send(result)
+})
+
+
+//---------------select class--------------------
 app.post('/select', async (req, res) => {
   const clss = req.body;
   const result = await selectClassCollection.insertOne(clss);
   res.send(result);
 })
 
+// delete from select
 
-app.get('/mySelectClass',verifyJWT, async (req, res) => {
-  const email = req.query.email;
-  console.log('selectclass', email)
+app.get('/mySelectClass/:email', verifyJWT, async (req, res) => {
+  const email = req.params.email;
+  // console.log('mySelected class')
+  // console.log('selectclass', email)
   if (!email) {
     res.send([]);
   }
@@ -97,6 +167,14 @@ app.get('/mySelectClass',verifyJWT, async (req, res) => {
   const result = await selectClassCollection.find(query).toArray();
   res.send(result);
 });
+
+// -----------------------myselect class delete -------------------------
+app.delete('/select/delete/:id', verifyJWT, async (req, res) => {
+  const id = req.params.id
+  const query = { _id: new ObjectId(id) }
+  const result = await selectClassCollection.deleteOne(query)
+  res.send(result)
+})
 
 //admin
 app.get('/users/admin/:email', verifyJWT, async (req, res) => {
@@ -114,7 +192,6 @@ app.get('/users/admin/:email', verifyJWT, async (req, res) => {
 //instructor
 app.get('/users/instructor/:email', verifyJWT, async (req, res) => {
   const email = req.params.email;
-
   if (req.decoded.email !== email) {
     res.send({ instructor: false })
   }
@@ -187,20 +264,18 @@ app.get('/allClass', async (req, res) => {
   const result = await classCollention.find().toArray()
   res.send(result)
 })
+
+// --------------------get all approve class---------------------------
 app.get('/approveClass', async (req, res) => {
   const status = { status: "approve" }
   const result = await classCollention.find(status).toArray()
   res.send(result)
 })
-// app.get('/instructor', async (req, res) => {
-//   const role = { role: "instructor" }//instructor
-//   const result = await usersCollection.find(role).toArray()
-//   res.send(result)
-// })
 
-app.get('/class/:email', verifyJWT, verifyInstructor, async (req, res) => {
+
+app.get('/class/:email', async (req, res) => {
   const email = req.params.email
-
+  console.log(email)
   const query = { email: email }
   const result = await classCollention.find(query).toArray()
   res.send(result)
@@ -225,22 +300,9 @@ app.patch('/class/approve/:id', async (req, res) => {
   const result = await classCollention.updateOne(filter, updateDoc)
   res.send(result)
 })
-/*    app.patch('/users/instructor/:id',async (req, res) => {
-     const id = req.params.id
-     const filter = {_id: new ObjectId(id)}
-     
-     const updateDoc = {
-       $set: {
-         role: 'instructor'
-       }
-     }
-     const result = await usersCollection.updateOne(filter,updateDoc)
-     res.send(result)
-   }) */
 
 app.put('/updateClas/:id', async (req, res) => {
   const newClass = req.body
-
   const id = req.params.id
   const filter = { _id: new ObjectId(id) }
   const options = { upsert: true };
