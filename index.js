@@ -302,6 +302,14 @@ app.get('/allClass', async (req, res) => {
   res.send(result)
 })
 
+// get all category
+app.get('/allCategory', async (req, res) => {
+ const projection = { category: 1, _id: 0 };
+    const result = await classCollention.find({}, { projection }).toArray();
+    const categories = result.map((category) => category.category.value);
+    res.json([... new Set(categories)]);
+})
+
 app.get('/approveClassNumber', async (req, res) => {
   const status = { status: "approve" }
   const result = await classCollention.find(status).toArray()
@@ -310,7 +318,6 @@ app.get('/approveClassNumber', async (req, res) => {
 })
 
 // just practice
-// app.get('/approveClassNumber', async (req, res) => {
 //   const status = { status: "approve" }
 //   const result = await classCollention.find(status).toArray()
 //   const totalApproveClass = { totalApproveClass: result.length }
@@ -342,12 +349,23 @@ app.get('/approveClassNumber', async (req, res) => {
 
 // --------------------get all approve class with paginations---------------------------
 app.get('/approveClass', async (req, res) => {
-  console.log(req.query)
+  const searchText = req.query.searchText
   const currentPage = parseInt(req.query.currentPage) || 0
   const itemsPerPage = parseInt(req.query.itemsPerPage) || 3
   const skip = currentPage * itemsPerPage
-  const status = { status: "approve" }
-  const result = await classCollention.find(status).skip(skip).limit(itemsPerPage).toArray()
+  const category = req.query.category
+  if (category === 'All Category') {
+    const status = { status: "approve" }
+    const result = await classCollention.find(status).skip(skip).limit(itemsPerPage).toArray()
+    res.send(result)
+    return
+  }
+
+  const status = {
+    status: "approve",
+    "category.value": category
+  }
+  const result = await classCollention.find(status).toArray()
   res.send(result)
 })
 // ----------------- get class by id for showing class details--------------
@@ -463,7 +481,7 @@ app.get('/total', async (req, res) => {
     {
       $group: {
         _id: null,
-        totalPrice: { $sum: { $toDouble: '$price' } } // Convert price to a number if it's stored as a string
+        totalPrice: { $sum: { $toDouble: '$price' } }
       }
     }
   ]).toArray()
