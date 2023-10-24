@@ -245,7 +245,7 @@ app.post('/createUser', async (req, res) => {
   const query = { email: email }
   const existing = await usersCollection.findOne(query)
   if (existing) {
-    return res.send({message:'user already exist'})
+    return res.send({ message: 'user already exist' })
   }
   const result = await usersCollection.insertOne(user)
   res.send(result)
@@ -304,10 +304,10 @@ app.get('/allClass', async (req, res) => {
 
 // get all category
 app.get('/allCategory', async (req, res) => {
- const projection = { category: 1, _id: 0 };
-    const result = await classCollention.find({}, { projection }).toArray();
-    const categories = result.map((category) => category.category.value);
-    res.json([... new Set(categories)]);
+  const projection = { category: 1, _id: 0 };
+  const result = await classCollention.find({}, { projection }).toArray();
+  const categories = result.map((category) => category.category.value);
+  res.json([... new Set(categories)]);
 })
 
 app.get('/approveClassNumber', async (req, res) => {
@@ -354,18 +354,25 @@ app.get('/approveClass', async (req, res) => {
   const itemsPerPage = parseInt(req.query.itemsPerPage) || 3
   const skip = currentPage * itemsPerPage
   const category = req.query.category
+
+  const query = {
+    status: "approve",
+    $or: [
+      { className: { $regex: searchText, $options: 'i' } },
+      { 'category.value': { $regex: searchText, $options: 'i' } }
+    ]
+  };
+  
+  if (category !== 'All Category') {
+    query['category.value'] = category
+  }
+
   if (category === 'All Category') {
-    const status = { status: "approve" }
-    const result = await classCollention.find(status).skip(skip).limit(itemsPerPage).toArray()
+    const result = await classCollention.find(query).skip(skip).limit(itemsPerPage).toArray()
     res.send(result)
     return
   }
-
-  const status = {
-    status: "approve",
-    "category.value": category
-  }
-  const result = await classCollention.find(status).toArray()
+  const result = await classCollention.find(query).toArray();
   res.send(result)
 })
 // ----------------- get class by id for showing class details--------------
